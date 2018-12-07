@@ -46,6 +46,6 @@ VM_NAME=${1}
 ACTION=${2}
 
 ### declare your port forwards here
-### format: <VM> <source port> <destination address> <destination port>
-addForward caasp-admin 20022 192.168.101.200 22
+### format: addForward <VM> <source port> <destination address> <destination port>
+# addForward caasp-admin 20022 192.168.101.200 22
 
