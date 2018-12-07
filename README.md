@@ -42,7 +42,7 @@ Refreshing network configurations, the easy way
 ================================================
 1. copy the "kvm-network-restart" script to your path (I recommend /usr/sbin).
 
-2. set it a executable:
+2. make it an executable:
 
        chmod +x /usr/sbin/kvm-network-restart
       
