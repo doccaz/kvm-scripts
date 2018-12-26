@@ -66,4 +66,15 @@ For example, let's say you wanted to reserve an IP address for a specific VM, an
   
 Then, run "kvm-network-restart <network name>" and you're set.
 
+
+Doing everything at once: the Python way
+========================================
+
+I'm also providing a hook script written in Python, that can be used to do everything in one place. This script receives (and parses) the machine information from stdin, and automatically starts/kills websocket servers for SPICE displays. It also knows how to deal with both iptables and firewalld to add/remove the proper ports.
+
+Just copy the provided qemu-hook-script-python to "qemu" under the /etc/libvirt/hooks directory. Don't forget to chmod +x it. 
+
+Syslog status messages are generated every time you start/stop a VM, just check out journalctl.
+
+
 Have fun!
