@@ -1,0 +1,114 @@
+#!/usr/bin/python
+# Hook script for QEMU
+# 
+# adds port forwards via IPtables to your VMs
+# starts websocket daemons for the SPICE web client
+#
+# Erico Mendonca (erico.mendonca@suse.com)
+# dec/2018
+
+import os
+import sys
+import syslog
+import subprocess
+from subprocess import Popen
+from lxml import etree
+
+# global variable that holds the XML that QEMU gives us
+MACHINE_INFO = ''
+
+def getAttribute(searchstr, attrname):
+    global MACHINE_INFO
+    found = MACHINE_INFO.findall(searchstr)
+    try:
+        for i in found:
+            syslog.syslog("found = %s" % i.attrib[attrname])
+            return i.attrib[attrname]
+        end
+    except KeyError as e:
+        return ""
+
+def runCommand(cmdargs):
+    syslog.syslog("Running command: %s" % cmdargs)
+    p = Popen(cmdargs, bufsize=1, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    (child_stdout, child_stdin)  = Popen.communicate(p)
+    #syslog.syslog("stdout: %s" % child_stdout)
+    #syslog.syslog("stdin: %s" % child_stdin)
+    #syslog.syslog("return code: %s" % p.returncode)
+
+    return (p.returncode, child_stdout, child_stdin)
+
+
+def getPID(process_name):
+    (rc, stdout, stdin) = runCommand(['/usr/bin/pgrep', '-f', '%s' % process_name])
+    if stdout:
+        return stdout.split('\n')
+    else:
+        return []
+
+
+def addForward(VM, HOST_PORT, GUEST_IP, GUEST_PORT):
+
+	IPTABLES="/usr/sbin/iptables"
+        global ACTION, VM_NAME, SUBACTION
+
+        if (ACTION == "stopped") | (ACTION == "reconnect"):
+            IPTABLES_ACTION="-D"
+        end
+
+        if (ACTION == "start") | (ACTION == "reconnect"):
+		IPTABLES_ACTION="-I"
+	end
+
+        if VM == VM_NAME:
+
+		HOST_BRIDGE=getAttribute('/domain/devices/interface[1]/source', 'bridge')
+                if HOST_BRIDGE == "":
+			syslog.syslog("Could not identify bridge interface for VM " % VM % ", skipping")
+			sys.exit(0)
+		end
+
+		syslog.syslog("adding forwarding rules for VM %s" % VM_NAME % ": host port %s" % HOST_PORT % " will be redirected to %s" % GUEST_IP % ":" % GUEST_PORT % " on interface %s" % HOST_BRIDGE)
+		runCommand([IPTABLES, IPTABLES_ACTION, 'FORWARD', '-o', HOST_BRIDGE, '-d', GUEST_IP, '-j', 'ACCEPT'])
+                runCommand([IPTABLES, '-t', 'nat', IPTABLES_ACTION, 'PREROUTING', '-p', 'tcp', '--dport', HOST_PORT, '-j', 'DNAT', '--to', GUEST_IP % ':' % GUEST_PORT])
+	end
+
+        return
+
+
+def main():
+
+    global MACHINE_INFO
+    syslog.openlog('qemu-hook')
+    VM_NAME=sys.argv[1]
+    ACTION=sys.argv[2]
+    SUBACTION=sys.argv[3]
+
+    MACHINE_INFO = etree.parse(sys.stdin)
+    SPICEPORT = getAttribute("./devices/graphics[@type='spice']", 'port')
+  
+    #syslog.syslog("Spice port = %s" % SPICEPORT)
+    #syslog.syslog("action = %s, subaction = %s" % (ACTION, SUBACTION))
+    #syslog.syslog("vm name = %s" % VM_NAME)
+
+    if (ACTION == "stopped") & (SUBACTION == "end"):
+        if SPICEPORT != "":
+            DAEMONPID=getPID('.*websockify.*1%s.*' % SPICEPORT)
+            #syslog.syslog("action = stopped, pids to kill: %s" % DAEMONPID)
+            for pid in DAEMONPID:
+                if pid != "":
+                    syslog.syslog("killing PID: %s" % pid)
+                    os.kill(int(pid), 15)
+            runCommand(['firewall-cmd', '--permanent', '--remove-port=1%s/tcp' % SPICEPORT])
+            runCommand(['firewall-cmd', '--remove-port=1%s/tcp' % SPICEPORT])
+
+    if (ACTION == "started") & (SUBACTION == "begin"):
+        if SPICEPORT != "":
+		syslog.syslog("action = start, starting websockify on port 1%s" % SPICEPORT)
+		runCommand(['websockify', '-D', '1%s' % SPICEPORT, 'localhost:%s' % SPICEPORT])
+                runCommand(['firewall-cmd', '--permanent', '--add-port=1%s/tcp' % SPICEPORT])
+                runCommand(['firewall-cmd', '--add-port=1%s/tcp' % SPICEPORT])
+
+if __name__ == "__main__":
+    main()
+
