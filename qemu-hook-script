@@ -9,7 +9,7 @@
 #
 
 log() {
-	logger -t addForward "$1"
+        logger -t addForward "$1"
 }
 
 addForward() {
@@ -21,31 +21,43 @@ addForward() {
    GUEST_PORT=$4
 
    if [ "${ACTION}" == "stopped" ] || [ "${ACTION}" == "reconnect" ]; then
-	   IPTABLES_ACTION="-D"
+           IPTABLES_ACTION="-D"
    fi
 
    if [ "${ACTION}" == "start" ] || [ "${ACTION}" == "reconnect" ]; then
-	   IPTABLES_ACTION="-I"
+           IPTABLES_ACTION="-I"
    fi
+
+   if [ "${ACTION}" == "prepare" ] || [ "${ACTION}" == "started" ] || [ "${ACTION}" == "stopped" ]; then
+           log "domain $VM is in prepare, started or stopped, ignoring." 
+           exit 0
+   fi
+
+
 
    if [ "${VM}" == "${VM_NAME}" ]; then
 
-	   HOST_BRIDGE=$(virsh dumpxml ${VM} | xpath -e /domain/devices/interface[1]/source | cut -d\= -f3 | cut -d\" -f2)
-	   if [ -z $HOST_BRIDGE ]; then
-		   log "Could not identify bridge interface for VM ${VM}, skipping"
-		   exit 0
-	   fi
+           HOST_BRIDGE=$(echo ${MACHINEINFO%x} | xpath -e /domain/devices/interface[1]/source | cut -d\= -f3 | cut -d\" -f2)
+           if [ -z $HOST_BRIDGE ]; then
+                   log "Could not identify bridge interface for VM ${VM}, skipping"
+                   exit 0
+           fi
 
-	   log "adding forwarding rules for VM ${VM_NAME}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${HOST_BRIDGE}"
-	   $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${HOST_BRIDGE} -d $GUEST_IP -j ACCEPT
-	   $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+           log "adding forwarding rules for VM ${VM_NAME}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${HOST_BRIDGE}"
+           $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${HOST_BRIDGE} -d $GUEST_IP -j ACCEPT
+           $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
    fi
 }
 
+
+## main program
 VM_NAME=${1}
 ACTION=${2}
 
-### declare your port forwards here
-### format: addForward <VM> <source port> <destination address> <destination port>
-# addForward caasp-admin 20022 192.168.101.200 22
+# read the XML from stdin
+MACHINEINFO=$(cat; echo x)
+log "MACHINE_INFO: ${MACHINE_INFO%x}"
 
+### declare your port forwards here
+### format: <VM> <source port> <destination address> <destination port>
+# addForward caasp-admin 20022 192.168.101.200 22
