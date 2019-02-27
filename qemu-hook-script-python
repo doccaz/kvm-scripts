@@ -24,7 +24,6 @@ def getAttribute(searchstr, attrname):
         for i in found:
             syslog.syslog("found = %s" % i.attrib[attrname])
             return i.attrib[attrname]
-        end
     except KeyError as e:
         return ""
 
@@ -86,6 +85,7 @@ def main():
 
     MACHINE_INFO = etree.parse(sys.stdin)
     SPICEPORT = getAttribute("./devices/graphics[@type='spice']", 'port')
+    VNCPORT = getAttribute("./devices/graphics[@type='vnc']", 'port')
   
     #syslog.syslog("Spice port = %s" % SPICEPORT)
     #syslog.syslog("action = %s, subaction = %s" % (ACTION, SUBACTION))
@@ -102,12 +102,29 @@ def main():
             runCommand(['firewall-cmd', '--permanent', '--remove-port=1%s/tcp' % SPICEPORT])
             runCommand(['firewall-cmd', '--remove-port=1%s/tcp' % SPICEPORT])
 
+        if VNCPORT != "":
+            DAEMONPID=getPID('.*websockify.*1%s.*' % VNCPORT)
+            #syslog.syslog("action = stopped, pids to kill: %s" % DAEMONPID)
+            for pid in DAEMONPID:
+                if pid != "":
+                    syslog.syslog("killing PID: %s" % pid)
+                    os.kill(int(pid), 15)
+            runCommand(['firewall-cmd', '--permanent', '--remove-port=2%s/tcp' % VNCPORT])
+            runCommand(['firewall-cmd', '--remove-port=2%s/tcp' % VNCPORT])
+
     if (ACTION == "started") & (SUBACTION == "begin"):
         if SPICEPORT != "":
 		syslog.syslog("action = start, starting websockify on port 1%s" % SPICEPORT)
 		runCommand(['websockify', '-D', '1%s' % SPICEPORT, 'localhost:%s' % SPICEPORT])
                 runCommand(['firewall-cmd', '--permanent', '--add-port=1%s/tcp' % SPICEPORT])
                 runCommand(['firewall-cmd', '--add-port=1%s/tcp' % SPICEPORT])
+
+        if VNCPORT != "":
+		syslog.syslog("action = start, starting websockify on port 2%s" % VNCPORT)
+		runCommand(['websockify', '-D', '2%s' % VNCPORT, 'localhost:%s' % VNCPORT])
+                runCommand(['firewall-cmd', '--permanent', '--add-port=2%s/tcp' % VNCPORT])
+                runCommand(['firewall-cmd', '--add-port=2%s/tcp' % VNCPORT])
+
 
 if __name__ == "__main__":
     main()
