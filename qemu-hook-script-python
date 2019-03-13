@@ -103,7 +103,7 @@ def main():
             runCommand(['firewall-cmd', '--remove-port=1%s/tcp' % SPICEPORT])
 
         if VNCPORT != "":
-            DAEMONPID=getPID('.*websockify.*1%s.*' % VNCPORT)
+            DAEMONPID=getPID('.*websockify.*2%s.*' % VNCPORT)
             #syslog.syslog("action = stopped, pids to kill: %s" % DAEMONPID)
             for pid in DAEMONPID:
                 if pid != "":
