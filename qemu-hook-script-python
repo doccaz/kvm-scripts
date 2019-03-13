@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 # Hook script for QEMU
 # 
 # adds port forwards via IPtables to your VMs
@@ -48,26 +48,32 @@ def getPID(process_name):
 
 def addForward(VM, HOST_PORT, GUEST_IP, GUEST_PORT):
 
-    IPTABLES="/usr/sbin/iptables"
-    global ACTION, VM_NAME, SUBACTION
+	IPTABLES="/usr/sbin/iptables"
+        global ACTION, VM_NAME, SUBACTION
 
-    if (ACTION == "stopped") or (ACTION == "reconnect"):
-        IPTABLES_ACTION="-D"
+        if (ACTION == "stopped") | (ACTION == "reconnect"):
+            IPTABLES_ACTION="-D"
+        end
 
-    if (ACTION == "start") or (ACTION == "reconnect"):
-        IPTABLES_ACTION="-I"
+        if (ACTION == "start") | (ACTION == "reconnect"):
+		IPTABLES_ACTION="-I"
+	end
 
-    if VM == VM_NAME:
+        if VM == VM_NAME:
 
-        HOST_BRIDGE=getAttribute('/domain/devices/interface[1]/source', 'bridge')
-        if HOST_BRIDGE == "":
-            syslog.syslog("Could not identify bridge interface for VM %s, skipping" % VM)
-            sys.exit(0)
+		HOST_BRIDGE=getAttribute('/domain/devices/interface[1]/source', 'bridge')
+                if HOST_BRIDGE == "":
+			syslog.syslog("Could not identify bridge interface for VM " % VM % ", skipping")
+			sys.exit(0)
+		end
 
-        syslog.syslog("adding forwarding rules for VM %s" % VM_NAME % ": host port %s" % HOST_PORT % " will be redirected to %s" % GUEST_IP % ":" % GUEST_PORT % " on interface %s" % HOST_BRIDGE)
-        runCommand([IPTABLES, IPTABLES_ACTION, 'FORWARD', '-o', HOST_BRIDGE, '-d', GUEST_IP, '-j', 'ACCEPT'])
-        runCommand([IPTABLES, '-t', 'nat', IPTABLES_ACTION, 'PREROUTING', '-p', 'tcp', '--dport', HOST_PORT, '-j', 'DNAT', '--to', GUEST_IP % ':' % GUEST_PORT])
-    return
+		syslog.syslog("adding forwarding rules for VM %s" % VM_NAME % ": host port %s" % HOST_PORT % " will be redirected to %s" % GUEST_IP % ":" % GUEST_PORT % " on interface %s" % HOST_BRIDGE)
+		runCommand([IPTABLES, IPTABLES_ACTION, 'FORWARD', '-o', HOST_BRIDGE, '-d', GUEST_IP, '-j', 'ACCEPT'])
+                runCommand([IPTABLES, '-t', 'nat', IPTABLES_ACTION, 'PREROUTING', '-p', 'tcp', '--dport', HOST_PORT, '-j', 'DNAT', '--to', GUEST_IP % ':' % GUEST_PORT])
+	end
+
+        return
+
 
 def main():
 
@@ -97,7 +103,7 @@ def main():
             runCommand(['firewall-cmd', '--remove-port=1%s/tcp' % SPICEPORT])
 
         if VNCPORT != "":
-            DAEMONPID=getPID('.*websockify.*2%s.*' % VNCPORT)
+            DAEMONPID=getPID('.*websockify.*1%s.*' % VNCPORT)
             #syslog.syslog("action = stopped, pids to kill: %s" % DAEMONPID)
             for pid in DAEMONPID:
                 if pid != "":
@@ -108,16 +114,16 @@ def main():
 
     if (ACTION == "started") & (SUBACTION == "begin"):
         if SPICEPORT != "":
-            syslog.syslog("action = start, starting websockify on port 1%s" % SPICEPORT)
-            runCommand(['websockify', '-D', '1%s' % SPICEPORT, 'localhost:%s' % SPICEPORT])
-            runCommand(['firewall-cmd', '--permanent', '--add-port=1%s/tcp' % SPICEPORT])
-            runCommand(['firewall-cmd', '--add-port=1%s/tcp' % SPICEPORT])
+		syslog.syslog("action = start, starting websockify on port 1%s" % SPICEPORT)
+		runCommand(['websockify', '-D', '1%s' % SPICEPORT, 'localhost:%s' % SPICEPORT])
+                runCommand(['firewall-cmd', '--permanent', '--add-port=1%s/tcp' % SPICEPORT])
+                runCommand(['firewall-cmd', '--add-port=1%s/tcp' % SPICEPORT])
 
         if VNCPORT != "":
-            syslog.syslog("action = start, starting websockify on port 2%s" % VNCPORT)
-            runCommand(['websockify', '-D', '2%s' % VNCPORT, 'localhost:%s' % VNCPORT])
-            runCommand(['firewall-cmd', '--permanent', '--add-port=2%s/tcp' % VNCPORT])
-            runCommand(['firewall-cmd', '--add-port=2%s/tcp' % VNCPORT])
+		syslog.syslog("action = start, starting websockify on port 2%s" % VNCPORT)
+		runCommand(['websockify', '-D', '2%s' % VNCPORT, 'localhost:%s' % VNCPORT])
+                runCommand(['firewall-cmd', '--permanent', '--add-port=2%s/tcp' % VNCPORT])
+                runCommand(['firewall-cmd', '--add-port=2%s/tcp' % VNCPORT])
 
 
 if __name__ == "__main__":
