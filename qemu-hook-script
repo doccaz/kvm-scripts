@@ -7,57 +7,73 @@
 # Erico Mendonca (erico.mendonca@suse.com)
 # dec/2018
 #
+# https://github.com/doccaz/kvm-scripts
+#
+# Adapted by Branislav Siarsky
+# apr/2020
+#
 
 log() {
         logger -t addForward "$1"
 }
 
 addForward() {
+   VM=$1
+   HOST_NIC=$2
+   HOST_IP=$3
+   HOST_PORT=$4
+   GUEST_NIC=$5
+   GUEST_IP=$6
+   GUEST_PORT=$7
 
    IPTABLES="/usr/sbin/iptables"
-   VM=$1
-   HOST_PORT=$2
-   GUEST_IP=$3
-   GUEST_PORT=$4
-
-   if [ "${ACTION}" == "stopped" ] || [ "${ACTION}" == "reconnect" ]; then
-           IPTABLES_ACTION="-D"
-   fi
-
-   if [ "${ACTION}" == "start" ] || [ "${ACTION}" == "reconnect" ]; then
-           IPTABLES_ACTION="-I"
-   fi
-
-   if [ "${ACTION}" == "prepare" ] || [ "${ACTION}" == "started" ] || [ "${ACTION}" == "stopped" ]; then
-           log "domain $VM is in prepare, started or stopped, ignoring." 
-           exit 0
-   fi
-
-
-
+   IP="/usr/sbin/ip"
+   HOST_IP_MASK="24"
+   IPTABLES_ACTION=""
+   IPTABLES_TEXT=""
+   IP_ACTION=""
+   IP_TEXT=""
+   
    if [ "${VM}" == "${VM_NAME}" ]; then
-
-           HOST_BRIDGE=$(echo ${MACHINEINFO%x} | xpath -e /domain/devices/interface[1]/source | cut -d\= -f3 | cut -d\" -f2)
-           if [ -z $HOST_BRIDGE ]; then
-                   log "Could not identify bridge interface for VM ${VM}, skipping"
-                   exit 0
-           fi
-
-           log "adding forwarding rules for VM ${VM_NAME}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${HOST_BRIDGE}"
-           $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${HOST_BRIDGE} -d $GUEST_IP -j ACCEPT
-           $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+	   if [ "${ACTION}" == "stopped" ]; then
+		   IPTABLES_ACTION="-D"
+		   IPTABLES_TEXT="Removing forwarding rules for VM ${VM}"
+		   IP_ACTION="del"
+		   IP_TEXT="Removing IP ${HOST_IP} from ${HOST_NIC}"
+	   fi
+	
+	   if [ "${ACTION}" == "start" ] || [ "${ACTION}" == "reconnect" ]; then
+		   IPTABLES_ACTION="-I"
+		   IPTABLES_TEXT="Adding forwarding rules for VM ${VM}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${GUEST_NIC}"
+		   IP_ACTION="add"
+		   IP_TEXT="Adding IP ${HOST_IP} to ${HOST_NIC}"
+	   fi
+	
+	   if [ "${IPTABLES_ACTION}" == "" ]; then
+		   log "Action ${ACTION} on domain $VM not configured, ignoring"
+		   exit 0
+	   else 
+		   log "Action ${ACTION} on domain $VM called"
+	   fi
+	     
+	   log "${IPTABLES_TEXT}"
+	   $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${GUEST_NIC} -d $GUEST_IP -j ACCEPT
+	   $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+	   
+	   log "${IP_TEXT}"
+	   $IP address ${IP_ACTION} ${HOST_IP}/${HOST_IP_MASK} dev ${HOST_NIC} 
    fi
 }
-
 
 ## main program
 VM_NAME=${1}
 ACTION=${2}
 
-# read the XML from stdin
-MACHINEINFO=$(cat; echo x)
-log "MACHINE_INFO: ${MACHINE_INFO%x}"
-
 ### declare your port forwards here
-### format: <VM> <source port> <destination address> <destination port>
-# addForward caasp-admin 20022 192.168.101.200 22
+### format: addForward <VM> <source nic> <source address> <source port> <destination nic> <destination address> <destination port>
+#Port 80 forward:   addForward debian10-vm2 enp3s0f0 192.168.1.17 80 virbr0 192.168.122.2 80
+#All ports forward: addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.2 1-65535
+addForward debian10-vm1 enp3s0f0 192.168.1.16 1:65535 virbr0 192.168.122.16 1-65535
+addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.17 1-65535
+addForward debian10-vm3 enp3s0f0 192.168.1.18 1:65535 virbr0 192.168.122.18 1-65535
+
