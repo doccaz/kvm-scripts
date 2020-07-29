@@ -25,6 +25,7 @@ addForward() {
    GUEST_NIC=$5
    GUEST_IP=$6
    GUEST_PORT=$7
+   PROTOCOL=$8
 
    IPTABLES="/usr/sbin/iptables"
    IP="/usr/sbin/ip"
@@ -58,7 +59,15 @@ addForward() {
 	     
 	   log "${IPTABLES_TEXT}"
 	   $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${GUEST_NIC} -d $GUEST_IP -j ACCEPT
-	   $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+	   
+	   if [ "${PROTOCOL}" == "tcp" ] || [ "${PROTOCOL}" == "TCP" ]; then
+	   	$IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+	   elif [ "${PROTOCOL}" == "udp" ] || [ "${PROTOCOL}" == "UDP" ]; then
+	   	$IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p udp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+	   else
+	   	log "Invalid protocol provided, choose TCP or UDP"
+		exit 0
+	   fi
 	   
 	   log "${IP_TEXT}"
 	   $IP address ${IP_ACTION} ${HOST_IP}/${HOST_IP_MASK} dev ${HOST_NIC} 
@@ -70,10 +79,10 @@ VM_NAME=${1}
 ACTION=${2}
 
 ### declare your port forwards here
-### format: addForward <VM> <source nic> <source address> <source port> <destination nic> <destination address> <destination port>
-#Port 80 forward:   addForward debian10-vm2 enp3s0f0 192.168.1.17 80 virbr0 192.168.122.2 80
-#All ports forward: addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.2 1-65535
-addForward debian10-vm1 enp3s0f0 192.168.1.16 1:65535 virbr0 192.168.122.16 1-65535
-addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.17 1-65535
-addForward debian10-vm3 enp3s0f0 192.168.1.18 1:65535 virbr0 192.168.122.18 1-65535
+### format: addForward <VM> <source nic> <source address> <source port> <destination nic> <destination address> <destination port> <protocol>
+#Port 80 forward:   addForward debian10-vm2 enp3s0f0 192.168.1.17 80 virbr0 192.168.122.2 80 tcp
+#All ports forward: addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.2 1-65535 tcp
+addForward debian10-vm1 enp3s0f0 192.168.1.16 1:65535 virbr0 192.168.122.16 1-65535 tcp
+addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.17 1-65535 tcp
+addForward debian10-vm3 enp3s0f0 192.168.1.18 1:65535 virbr0 192.168.122.18 1-65535 tcp
 
