@@ -25,6 +25,7 @@ addForward() {
    GUEST_NIC=$5
    GUEST_IP=$6
    GUEST_PORT=$7
+   PROTOCOL=$8
 
    IPTABLES="/usr/sbin/iptables"
    IP="/usr/sbin/ip"
@@ -33,35 +34,42 @@ addForward() {
    IPTABLES_TEXT=""
    IP_ACTION=""
    IP_TEXT=""
-   
+
    if [ "${VM}" == "${VM_NAME}" ]; then
-	   if [ "${ACTION}" == "stopped" ]; then
-		   IPTABLES_ACTION="-D"
-		   IPTABLES_TEXT="Removing forwarding rules for VM ${VM}"
-		   IP_ACTION="del"
-		   IP_TEXT="Removing IP ${HOST_IP} from ${HOST_NIC}"
-	   fi
-	
-	   if [ "${ACTION}" == "start" ] || [ "${ACTION}" == "reconnect" ]; then
-		   IPTABLES_ACTION="-I"
-		   IPTABLES_TEXT="Adding forwarding rules for VM ${VM}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${GUEST_NIC}"
-		   IP_ACTION="add"
-		   IP_TEXT="Adding IP ${HOST_IP} to ${HOST_NIC}"
-	   fi
-	
-	   if [ "${IPTABLES_ACTION}" == "" ]; then
-		   log "Action ${ACTION} on domain $VM not configured, ignoring"
-		   exit 0
-	   else 
-		   log "Action ${ACTION} on domain $VM called"
-	   fi
-	     
-	   log "${IPTABLES_TEXT}"
-	   $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${GUEST_NIC} -d $GUEST_IP -j ACCEPT
-	   $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
-	   
-	   log "${IP_TEXT}"
-	   $IP address ${IP_ACTION} ${HOST_IP}/${HOST_IP_MASK} dev ${HOST_NIC} 
+     if [ "${ACTION}" == "stopped" ]; then
+       IPTABLES_ACTION="-D"
+       IPTABLES_TEXT="Removing forwarding rules for VM ${VM}"
+       IP_ACTION="del"
+       IP_TEXT="Removing IP ${HOST_IP} from ${HOST_NIC}"
+     fi
+
+     if [ "${ACTION}" == "start" ] || [ "${ACTION}" == "reconnect" ]; then
+       IPTABLES_ACTION="-I"
+       IPTABLES_TEXT="Adding forwarding rules for VM ${VM}: host port ${HOST_PORT} will be redirected to ${GUEST_IP}:${GUEST_PORT} on interface ${GUEST_NIC}"
+       IP_ACTION="add"
+       IP_TEXT="Adding IP ${HOST_IP} to ${HOST_NIC}"
+     fi
+
+     if [ "${IPTABLES_ACTION}" == "" ]; then
+       log "Action ${ACTION} on domain $VM not configured, ignoring"
+       exit 0
+     else 
+       log "Action ${ACTION} on domain $VM called"
+     fi
+
+     log "${IPTABLES_TEXT}"
+     $IPTABLES ${IPTABLES_ACTION} FORWARD -o ${GUEST_NIC} -d $GUEST_IP -j ACCEPT
+
+     if [[ "${PROTOCOL}" == *"tcp"* ]] || [[ "${PROTOCOL}" == *"TCP"* ]]; then
+      $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p tcp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+     fi
+
+     if [[ "${PROTOCOL}" == *"udp"* ]] || [[ "${PROTOCOL}" == *"UDP"* ]]; then
+      $IPTABLES -t nat ${IPTABLES_ACTION} PREROUTING -d $HOST_IP -p udp --dport $HOST_PORT -j DNAT --to $GUEST_IP:$GUEST_PORT
+     fi
+
+     log "${IP_TEXT}"
+     $IP address ${IP_ACTION} ${HOST_IP}/${HOST_IP_MASK} dev ${HOST_NIC} 
    fi
 }
 
@@ -70,10 +78,10 @@ VM_NAME=${1}
 ACTION=${2}
 
 ### declare your port forwards here
-### format: addForward <VM> <source nic> <source address> <source port> <destination nic> <destination address> <destination port>
-#Port 80 forward:   addForward debian10-vm2 enp3s0f0 192.168.1.17 80 virbr0 192.168.122.2 80
-#All ports forward: addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.2 1-65535
-addForward debian10-vm1 enp3s0f0 192.168.1.16 1:65535 virbr0 192.168.122.16 1-65535
-addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.17 1-65535
-addForward debian10-vm3 enp3s0f0 192.168.1.18 1:65535 virbr0 192.168.122.18 1-65535
+### format: addForward <VM> <source nic> <source address> <source port> <destination nic> <destination address> <destination port> <protocol>
+#Port 80 forward:   addForward debian10-vm2 enp3s0f0 192.168.1.17 80 virbr0 192.168.122.2 80 tcp
+#All ports forward: addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.2 1-65535 tcp,udp
+addForward debian10-vm1 enp3s0f0 192.168.1.16 1:65535 virbr0 192.168.122.16 1-65535 tcp
+addForward debian10-vm2 enp3s0f0 192.168.1.17 1:65535 virbr0 192.168.122.17 1-65535 tcp
+addForward debian10-vm3 enp3s0f0 192.168.1.18 1:65535 virbr0 192.168.122.18 1-65535 tcp
 
