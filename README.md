@@ -83,7 +83,9 @@ Talking to QEMU Guest Agent
 I included a small tool to talk to the installed QEMU Guest Agent (only on the KVM host, as it talks directly to the socket provided by the special guest-agent device inside the VM!) and do some common functions.
 The official API is not very easy to work with from the command-line, so this tool makes things a little easier.
 
+```
 # qemuguest [-n <VM name>] [-h|--help] [-e|--exec <command to execute>] [-i|--info] [--changepassword|-p <username:password>] [-f|--filesystems]
+```
 
 Executing a command:
 
