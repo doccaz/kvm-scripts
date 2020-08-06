@@ -93,7 +93,7 @@ Executing a command:
 # ./qemuguest -n MYVM-1 -e "uname -a"
 Command execution returned PID=15643
 Command execution returned RC=0
-exec rc = 0, output=[Linux TF798401767.age7984.bb 4.12.14-197.37-default #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980) x86_64 x86_64 x86_64 GNU/Linux
+exec rc = 0, output=[Linux myvm1.localdomain 4.12.14-197.37-default #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980) x86_64 x86_64 x86_64 GNU/Linux
 ]
 ```
 
