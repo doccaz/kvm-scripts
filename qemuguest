@@ -236,7 +236,7 @@ def getFilesystems(vm_name):
 
 def usage():
 
-        print('qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>]')
+        print('qemuguest [-n <VM name>] [-h|--help] [-e|--exec <command to execute>] [-i|--info] [--changepassword|-p <username:password>] [-f|--filesystems]')
         return
 
 

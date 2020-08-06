@@ -83,7 +83,7 @@ Talking to QEMU Guest Agent
 I included a small tool to talk to the installed QEMU Guest Agent (only on the KVM host, as it talks directly to the socket provided by the special guest-agent device inside the VM!) and do some common functions.
 The official API is not very easy to work with from the command-line, so this tool makes things a little easier.
 
-# qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>|-f]
+# qemuguest [-n <VM name>] [-h|--help] [-e|--exec <command to execute>] [-i|--info] [--changepassword|-p <username:password>] [-f|--filesystems]
 
 Executing a command:
 
@@ -91,7 +91,7 @@ Executing a command:
 # ./qemuguest -n MYVM-1 -e "uname -a"
 Command execution returned PID=15643
 Command execution returned RC=0
-exec rc = 0, output=[Linux TF798401767.age7984.bb 4.12.14-197.37-default #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980) x86_64 x86_64 x86_64 GNU/Linux
+exec rc = 0, output=[Linux myvm1.localdomain 4.12.14-197.37-default #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980) x86_64 x86_64 x86_64 GNU/Linux
 ]
 ```
 
