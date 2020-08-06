@@ -77,4 +77,48 @@ Just copy the provided qemu-hook-script-python to "qemu" under the /etc/libvirt/
 Syslog status messages are generated every time you start/stop a VM, just check out journalctl.
 
 
+Talking to QEMU Guest Agent
+===========================
+
+I included a small tool to talk to the installed QEMU Guest Agent (only on the KVM host!) and do some common functions.
+The official API is not very easy to work with from the command-line, so this tool makes things a little easier.
+
+# qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>]
+
+Executing a command:
+
+```
+# ./qemuguest -n MYVM-1 -e "uname -a"
+Command execution returned PID=15643
+Command execution returned RC=0
+exec rc = 0, output=[Linux TF798401767.age7984.bb 4.12.14-197.37-default #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980) x86_64 x86_64 x86_64 GNU/Linux
+]
+```
+
+It only waits for 5 seconds by default, so if your command takes too long, it may not retrieve the results.
+
+
+Getting information:
+
+```
+# qemuguest -n MYVM-1 -i
+
+{u'id': u'sled',
+ u'kernel-release': u'4.12.14-197.37-default',
+ u'kernel-version': u'#1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980)',
+ u'machine': u'x86_64',
+ u'name': u'SLED',
+ u'pretty-name': u'SUSE Linux Enterprise Desktop 15 SP1',
+ u'version': u'15-SP1',
+ u'version-id': u'15.1'}
+```
+
+Changing a user password:
+
+```
+# qemuguest -n MYVM-1 -p root:password
+set password = [True]
+```
+
+
 Have fun!

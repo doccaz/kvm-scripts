@@ -1,0 +1,208 @@
+#!/usr/bin/python
+import sys
+import time
+import base64
+import pprint
+import subprocess
+import json
+from subprocess import check_output, CalledProcessError
+from subprocess import PIPE
+import getopt
+
+def getOSVersion(vm_name):
+    osInfoCMD = {
+            "execute":"guest-get-osinfo"
+            }
+
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(osInfoCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error getting guest agent OS Info: %s' % e)
+        return "no OS information available"
+    return json.loads(cmd_result)['return']
+
+
+
+def guestExec(vm_name, cmd, args):
+    execCMD = {
+            "execute":"guest-exec",
+            "arguments":{  
+                "path": cmd,
+                "arg": args,
+                "capture-output":True
+                }
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, 'error executing command')
+
+    pid = json.loads(cmd_result)['return']['pid']
+    print('Command execution returned PID=%s' % pid)
+
+    time.sleep(2)
+    resultCMD = {  
+            "execute":"guest-exec-status",
+            "arguments":{  
+                "pid":pid
+                }
+            }
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(resultCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+        #print('command output: %s' % cmd_result)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, '')
+    ret = json.loads(cmd_result)['return']['exitcode']
+    print('Command execution returned RC=%s' % ret)
+
+    output = json.loads(cmd_result)['return']['out-data']
+    #print("Command output: [%s]" % output)
+
+    decoded_output = base64.b64decode(output).decode("utf-8")
+    #print("Decoded output: [%s]" % (decoded_output))
+    return (ret, decoded_output)
+    
+
+def guestSetPassword(vm_name, username, password):
+    execCMD = {
+            "execute":"guest-set-user-password",
+            "arguments":{  
+                "username": username,
+                "password": base64.encodestring(password.encode('ascii')).decode('ascii'),
+                "crypted":False
+                }
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return False
+
+    output = json.loads(cmd_result)
+    #print('Command execution returned [%s]' % output)
+
+    if output['return'] == {}:
+        return True
+    else:
+        print('error changing password: [%s]' % output)
+        return False
+
+def readFileFromVM(vm_name, filename):
+    file_handle = -1
+    fileOpenCMD = {
+            "execute":"guest-file-open",
+            "arguments":{
+                "path":"%s" % filename
+                }
+            }
+
+
+    # get the file handle first
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileOpenCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error while opening file from VM: %s' % e)
+        return ""
+
+    file_handle = json.loads(cmd_result)['return']
+    print("file handle: %s" % file_handle)
+
+    if file_handle <= 0:
+        print('Invalid handle while opening file from VM')
+        return ""
+
+    # command structures with the file handle
+    fileReadCMD = {
+            "execute":"guest-file-read",
+            "arguments":{
+                "handle": file_handle, 
+                "count":32768
+                }
+            }
+    
+    fileCloseCMD = {
+            "execute":"guest-file-close", 
+            "arguments":{
+                "handle":file_handle
+                }
+            }
+    # we have a valid file handle, let's get the contents
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileReadCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error while getting file contents from VM')
+        return ""
+    
+    file_contents = json.loads(cmd_result)['return']['buf-b64']
+    file_size = json.loads(cmd_result)['return']['count']
+    print("Received file %s (%d bytes)" % (filename, file_size))
+
+    decoded_file = base64.b64decode(file_contents)
+    #print("Decoded content: [%s]" % (decoded_file))
+
+    # now we need to close the file handle
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileCloseCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+        #print("Close file handle %s: %s" % (file_handle, json.loads(cmd_result)['return']))
+    except CalledProcessError as e:
+        print('Error while closing file handle: %s' % e)
+
+    return decoded_file
+
+def usage():
+
+        print('qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>]')
+        return
+
+
+def main(argv):
+    try:
+        opts, args = getopt.getopt(argv,"hn:ie:p:",["help","vm=","info","exec=","changepassword="])
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+
+    if len(argv) == 0:
+        usage()
+        sys.exit()
+
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            usage()
+            sys.exit()
+        elif opt in ("-n", "--vm"):
+            vm_name = arg
+        elif opt in ("-i", "--info"):
+            pprint.pprint(getOSVersion(vm_name))
+
+        elif opt in ("-e", "--exec"):
+            cmds = arg.split()
+            command = cmds[0]
+            cmds.remove(cmds[0])
+            args = cmds
+            ret,output = guestExec(vm_name, command, args)
+            print('exec rc = %s, output=[%s]' % (ret, output))
+            
+        elif opt in ("-p", "--changepass"):
+            params = arg.split(':')
+            output = guestSetPassword(vm_name, params[0], params[1])
+            print('set password = [%s]' % output)
+
+
+    
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
+
+
