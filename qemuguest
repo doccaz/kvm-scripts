@@ -2,7 +2,6 @@
 import sys
 import time
 import base64
-import pprint
 import subprocess
 import json
 from subprocess import check_output, CalledProcessError
@@ -160,6 +159,81 @@ def readFileFromVM(vm_name, filename):
 
     return decoded_file
 
+
+def getNetworkInterfaces(vm_name):
+
+    execCMD = {
+            "execute":"guest-network-get-interfaces",
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, 'error executing command')
+
+    output = json.loads(cmd_result)
+    #print("Command output: [%s]" % output)
+
+    return output['return']
+
+def getHostname(vm_name):
+
+    execCMD = {
+            "execute":"guest-get-host-name",
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, 'error executing command')
+
+    output = json.loads(cmd_result)
+    #print("Command output: [%s]" % output)
+
+    return output['return']['host-name']
+
+
+def getVCPUs(vm_name):
+
+    execCMD = {
+            "execute":"guest-get-vcpus",
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, 'error executing command')
+
+    output = json.loads(cmd_result)
+    #print("Command output: [%s]" % output)
+
+    return output['return']
+
+
+def getFilesystems(vm_name):
+
+    execCMD = {
+            "execute":"guest-get-fsinfo",
+            }
+    
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error executing command')
+        return (-1, 'error executing command')
+
+    output = json.loads(cmd_result)
+    #print("Command output: [%s]" % output)
+
+    return output['return']
+
 def usage():
 
         print('qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>]')
@@ -168,7 +242,7 @@ def usage():
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(argv,"hn:ie:p:",["help","vm=","info","exec=","changepassword="])
+        opts, args = getopt.getopt(argv,"hn:ie:p:if",["help","vm=","info","exec=","changepassword=","filesystems"])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -184,7 +258,32 @@ def main(argv):
         elif opt in ("-n", "--vm"):
             vm_name = arg
         elif opt in ("-i", "--info"):
-            pprint.pprint(getOSVersion(vm_name))
+            print('---- System information ----\n')
+            print('Host name: ' + getHostname(vm_name))
+            for cpu in getVCPUs(vm_name):
+                status = "online" if cpu['online'] else "offline"
+                print('vCPU ' + str(cpu['logical-id']) + ': ' + status)
+
+            print('\n---- OS information ----\n')
+            osinfo = getOSVersion(vm_name)
+            for k in osinfo.keys():
+                print(k + ': ' + osinfo[k])
+
+            print('\n---- Network Interfaces ----\n')
+            for nic in getNetworkInterfaces(vm_name):
+                print(nic['name'] + ' (mac: ' + nic['hardware-address'] + ')')
+                for ip in nic['ip-addresses']:
+                    print('\t' + ip['ip-address'] + '/' + str(ip['prefix']) + ' (' + ip['ip-address-type'] + ')')
+
+        elif opt in ("-f", "--filesystems"):
+            print('---- Filesystem information ----\n')
+            filesystems =  getFilesystems(vm_name)
+            for fs in filesystems:
+                print('Device: %s (%s)' % (fs['name'], fs['disk'][0]['serial']))
+                print('Mount point: %s' % fs['mountpoint'])
+                print('File system: %s' % fs['type'])
+                print('Used bytes: %d MiB (Total: %d MiB)' % (fs['used-bytes']/1024/1024, fs['total-bytes']/1024/1024))
+                print('\n')
 
         elif opt in ("-e", "--exec"):
             cmds = arg.split()

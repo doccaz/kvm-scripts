@@ -80,10 +80,10 @@ Syslog status messages are generated every time you start/stop a VM, just check 
 Talking to QEMU Guest Agent
 ===========================
 
-I included a small tool to talk to the installed QEMU Guest Agent (only on the KVM host!) and do some common functions.
+I included a small tool to talk to the installed QEMU Guest Agent (only on the KVM host, as it talks directly to the socket provided by the special guest-agent device inside the VM!) and do some common functions.
 The official API is not very easy to work with from the command-line, so this tool makes things a little easier.
 
-# qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>]
+# qemuguest [-n <VM name>] [-e <command to execute>|-i|-p <username:password>|-f]
 
 Executing a command:
 
@@ -103,14 +103,51 @@ Getting information:
 ```
 # qemuguest -n MYVM-1 -i
 
-{u'id': u'sled',
- u'kernel-release': u'4.12.14-197.37-default',
- u'kernel-version': u'#1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980)',
- u'machine': u'x86_64',
- u'name': u'SLED',
- u'pretty-name': u'SUSE Linux Enterprise Desktop 15 SP1',
- u'version': u'15-SP1',
- u'version-id': u'15.1'}
+---- System information ----
+
+version-id: 15.1
+kernel-version: #1 SMP Fri Mar 20 14:56:51 UTC 2020 (e98f980)
+name: SLED
+machine: x86_64
+version: 15-SP1
+pretty-name: SUSE Linux Enterprise Desktop 15 SP1
+kernel-release: 4.12.14-197.37-default
+id: sled
+
+---- Network Interfaces ----
+
+lo (mac: 00:00:00:00:00:00)
+        127.0.0.1/8 (ipv4)
+eth0 (mac: 52:54:00:6d:46:d4)
+        10.24.101.169/24 (ipv4)
+        fe80::76f5:aa91:4640:5a8b/64 (ipv6)
+docker0 (mac: 02:42:8c:e2:4d:2b)
+        10.1.1.1/24 (ipv4)
+
+```
+
+
+Listing file systems:
+
+```
+# ./qemuguest -n MYVM-1 -f
+---- Filesystem information ----
+
+Device: sda7 (QEMU_HARDDISK_QM00003)
+Mount point: /home
+File system: ext4
+Used bytes: 15 MiB (Total: 3644 MiB)
+
+Device: sda2 (QEMU_HARDDISK_QM00003)
+Mount point: /boot/efi
+File system: vfat
+Used bytes: 0 MiB (Total: 99 MiB)
+
+
+Device: sda4 (QEMU_HARDDISK_QM00003)
+Mount point: /
+File system: ext4
+Used bytes: 7184 MiB (Total: 8530 MiB)
 ```
 
 Changing a user password:
