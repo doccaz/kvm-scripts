@@ -159,5 +159,27 @@ Changing a user password:
 set password = [True]
 ```
 
+Downloading a file from the guest:
+
+```
+# qemuguest -n MYVM-1 -d /etc/issue:test.remote
+Received file /etc/issue (104 bytes)
+```
+
+Files are limited to 65KiB.
+
+
+Uploading a file to the guest:
+
+```
+# qemuguest -n MYVM-1 -u test.remote:/root/blah
+Sending file test.remote to /root/blah
+Total bytes written: 104
+```
+
+Files are limited to 65KiB. All files are created with the default umask and root:root.
+If you need a different owner/group and/or permission, run the appropriate command via the "--exec" parameter.
+
+
 
 Have fun!
