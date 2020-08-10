@@ -60,7 +60,10 @@ def guestExec(vm_name, cmd, args):
     ret = json.loads(cmd_result)['return']['exitcode']
     print('Command execution returned RC=%s' % ret)
 
-    output = json.loads(cmd_result)['return']['out-data']
+    try:
+        output = json.loads(cmd_result)['return']['out-data']
+    except KeyError:
+        output = ''
     #print("Command output: [%s]" % output)
 
     decoded_output = base64.b64decode(output).decode("utf-8")
@@ -103,17 +106,16 @@ def readFileFromVM(vm_name, filename):
                 }
             }
 
-
     # get the file handle first
     cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileOpenCMD)]
     try:
         cmd_result = subprocess.check_output(cmd_list)
     except CalledProcessError as e:
-        print('Error while opening file from VM: %s' % e)
+        # print('Error while opening file from VM: %s' % e)
         return ""
 
     file_handle = json.loads(cmd_result)['return']
-    print("file handle: %s" % file_handle)
+    #print("file handle: %s" % file_handle)
 
     if file_handle <= 0:
         print('Invalid handle while opening file from VM')
@@ -124,7 +126,7 @@ def readFileFromVM(vm_name, filename):
             "execute":"guest-file-read",
             "arguments":{
                 "handle": file_handle, 
-                "count":32768
+                "count":65535
                 }
             }
     
@@ -160,6 +162,79 @@ def readFileFromVM(vm_name, filename):
     return decoded_file
 
 
+def writeFileToVM(vm_name, local_file, remote_file):
+    file_handle = -1
+    fileOpenCMD = {
+            "execute":"guest-file-open",
+            "arguments":{
+                "path":"%s" % remote_file,
+                "mode":"w"
+                }
+            }
+
+    # read local file contents
+    try:
+        with open(local_file, 'rb') as f:
+            file_contents = base64.b64encode(f.read())
+    except Exception as e:
+        print('Error [%s] opening local file: %s ' % (str(e), local_file))
+        return -1
+
+    print("Sending file %s to %s" % (local_file, remote_file))
+
+    # get the file handle first
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileOpenCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error while opening file from VM: %s' % e)
+        return -1
+
+    file_handle = json.loads(cmd_result)['return']
+    #print("file handle: %s" % file_handle)
+
+    if file_handle <= 0:
+        print('Invalid handle while opening file from VM')
+        return ""
+
+
+    # command structures with the file handle
+    fileWriteCMD = {
+            "execute":"guest-file-write",
+            "arguments":{
+                "handle": file_handle, 
+                "buf-b64":file_contents
+                }
+            }
+    
+    fileCloseCMD = {
+            "execute":"guest-file-close", 
+            "arguments":{
+                "handle":file_handle
+                }
+            }
+    # we have a valid file handle, let's write the contents
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileWriteCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        print('Error while writing file to VM: ' + str(e))
+        return ""
+    
+    #print("Return: [%s]" % (cmd_result))
+    bytes_written =  json.loads(cmd_result)['return']['count']
+
+    # now we need to close the file handle
+    cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(fileCloseCMD)]
+    try:
+        cmd_result = subprocess.check_output(cmd_list)
+        #print("Close file handle %s: %s" % (file_handle, json.loads(cmd_result)['return']))
+    except CalledProcessError as e:
+        print('Error while closing file handle: %s' % e)
+
+    return bytes_written
+
+    
 def getNetworkInterfaces(vm_name):
 
     execCMD = {
@@ -216,6 +291,19 @@ def getVCPUs(vm_name):
     return output['return']
 
 
+def pingAgent(vm_name):
+    execCMD = {
+            "execute":"guest-ping",
+            }
+    try:
+        cmd_list = ['virsh', '-c', 'qemu:///system', 'qemu-agent-command', vm_name, json.dumps(execCMD)]
+        cmd_result = subprocess.check_output(cmd_list)
+    except CalledProcessError as e:
+        return False
+
+    output = json.loads(cmd_result)
+    return True
+
 def getFilesystems(vm_name):
 
     execCMD = {
@@ -236,13 +324,25 @@ def getFilesystems(vm_name):
 
 def usage():
 
-        print('qemuguest [-n <VM name>] [-h|--help] [-e|--exec <command to execute>] [-i|--info] [--changepassword|-p <username:password>] [-f|--filesystems]')
-        return
+    print('qemuguest [-n <VM name>] [-h|--help] [-e|--exec <command to execute>] [-i|--info] [--changepassword|-p <username:password>] [-f|--filesystems] [-u|--upload <local file>:<remote file>] [-d|--download <remote file>]')
+    return
+
+def checkPreReqs(vm_name):
+
+    if vm_name == '':
+        print('Must provide a VM name.')
+        usage()
+        sys.exit()
+
+    if pingAgent(vm_name) is False:
+        print('Guest Agent not responding on VM: ' + vm_name)
+        sys.exit()
+    return
 
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(argv,"hn:ie:p:if",["help","vm=","info","exec=","changepassword=","filesystems"])
+        opts, args = getopt.getopt(argv,"hn:ie:p:ifd:u:",["help","vm=","info","exec=","changepassword=","filesystems","download=","upload="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -251,6 +351,7 @@ def main(argv):
         usage()
         sys.exit()
 
+    vm_name = ''
     for opt, arg in opts:
         if opt in ("-h", "--help"):
             usage()
@@ -258,8 +359,9 @@ def main(argv):
         elif opt in ("-n", "--vm"):
             vm_name = arg
         elif opt in ("-i", "--info"):
+            checkPreReqs(vm_name)
             print('---- System information ----\n')
-            print('Host name: ' + getHostname(vm_name))
+            print('Host name: ' + str(getHostname(vm_name)))
             for cpu in getVCPUs(vm_name):
                 status = "online" if cpu['online'] else "offline"
                 print('vCPU ' + str(cpu['logical-id']) + ': ' + status)
@@ -276,6 +378,7 @@ def main(argv):
                     print('\t' + ip['ip-address'] + '/' + str(ip['prefix']) + ' (' + ip['ip-address-type'] + ')')
 
         elif opt in ("-f", "--filesystems"):
+            checkPreReqs(vm_name)
             print('---- Filesystem information ----\n')
             filesystems =  getFilesystems(vm_name)
             for fs in filesystems:
@@ -286,6 +389,7 @@ def main(argv):
                 print('\n')
 
         elif opt in ("-e", "--exec"):
+            checkPreReqs(vm_name)
             cmds = arg.split()
             command = cmds[0]
             cmds.remove(cmds[0])
@@ -294,12 +398,35 @@ def main(argv):
             print('exec rc = %s, output=[%s]' % (ret, output))
             
         elif opt in ("-p", "--changepass"):
+            checkPreReqs(vm_name)
             params = arg.split(':')
             output = guestSetPassword(vm_name, params[0], params[1])
             print('set password = [%s]' % output)
 
-
-    
+        elif opt in ("-d", "--download"):
+            checkPreReqs(vm_name)
+            params = arg.split(':')
+            if len(params) != 2:
+                print('You need to supply a remote filename and a local file name.')
+                print('e.g.: <remote file>:<local file>')
+                sys.exit()
+            file_contents = readFileFromVM(vm_name, params[0])
+            if file_contents == '':
+                print('returned content is null, will not write file.')
+                sys.exit(1)
+            
+            with open(params[1], 'w') as f:
+                f.write(file_contents)
+        
+        elif opt in ("-u", "--upload"):
+            checkPreReqs(vm_name)
+            params = arg.split(':')
+            if len(params) != 2:
+                print('You need to supply a local filename and a remote file name.')
+                print('e.g.: <local file>:<remote file>')
+                sys.exit()
+            print('Total bytes written: %d' % writeFileToVM(vm_name, params[0], params[1]))
+            
 
 if __name__ == "__main__":
     main(sys.argv[1:])
