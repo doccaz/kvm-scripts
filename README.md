@@ -27,10 +27,15 @@ Adding port forwards, the easy way
 2. modify the file to add your forwarding rules. Adding a port forward is as simple as adding a line like this:
 
        addForward <VM name> <source port> <destination address> <destination port>
+       addForward <VM name> <source NIC> <source address> <source port> <destination NIC> <destination address> <destination port> <protocol>
 
-For example, to redirect incoming connections on port 20022 to an internal address of 192.168.101.200 on port 22, whenever the VM named "caasp-admin" is started, you'd write:
+For example, to redirect incoming connections on eth0 (192.168.56.1) port 20022/tcp to an internal address of 192.168.101.200 on port 22/tcp, whenever the VM named "caasp-admin" is started, you'd write:
 
-    addForward caasp-admin 20022 192.168.101.200 22
+    addForward caasp-admin eth0 192.168.56.10 20022 virbr0 192.168.101.200 22 tcp
+
+To redirect all TCP ports for the same host instead:
+
+    addForward caasp-admin eth0 192.168.56.10 1:65535 virbr0 192.168.101.200 1-65535 tcp
 
 3. Set it as executable, or else QEMU/KVM won't call the hook script:
 
