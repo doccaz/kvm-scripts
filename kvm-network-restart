@@ -39,6 +39,10 @@ if [ -z $1 ]; then
 	exit 1
 fi
 
+command -v xpath >/dev/null 2>&1 || { echo >&2 "I require xpath, but it's not installed. Try apt install libxml-xapth-perl (Debian/Ubuntu). Aborting."; exit 1; }
+command -v virsh >/dev/null 2>&1 || { echo >&2 "I require virsh, but it's not installed?. Aborting."; exit 1; }
+
+
 NETWORK_NAME=$1
 NETWORK_HOOK=/etc/libvirt/hooks/qemu
 
