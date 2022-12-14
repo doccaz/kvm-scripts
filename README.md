@@ -43,6 +43,9 @@ To redirect all TCP ports for the same host instead:
 
 The next time you start the VMs listed, the port forwards will be defined properly.
 
+Alternative script that accepts multiple network devices (via nftables): https://github.com/se1by/libvirt-hook-nftables
+
+
 Refreshing network configurations, the easy way
 ================================================
 1. copy the "kvm-network-restart" script to your path (I recommend /usr/sbin).
